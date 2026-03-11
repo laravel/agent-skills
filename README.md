@@ -34,14 +34,6 @@ A skill for deploying and managing applications on [Laravel Cloud](https://cloud
 /plugin install laravel-cloud@laravel
 ```
 
-### Cursor
-
-```
-/plugin marketplace add laravel/agent-skills
-/plugin install laravel-simplifier@laravel
-/plugin install laravel-cloud@laravel
-```
-
 ## Usage
 
 **laravel-simplifier** — invoke the agent after a coding session:
