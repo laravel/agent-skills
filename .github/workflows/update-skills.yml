@@ -32,7 +32,7 @@ jobs:
           cp -r resources/boost/skills/configure-nightwatch/. \
             $GITHUB_WORKSPACE/laravel-nightwatch/skills/configure-nightwatch/
 
-      - uses: stefanzweifel/git-auto-commit-action@v5
+      - name: Commit updated skills
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
-          commit_message: 'chore: update skills from upstream'
-          file_pattern: 'laravel-cloud/skills/ laravel-nightwatch/skills/'
+          commit_message: Update skills from upstream
