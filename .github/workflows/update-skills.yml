@@ -1,0 +1,38 @@
+name: Update Skills
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch cloud-cli skills
+        run: |
+          git clone --no-checkout --depth 1 --filter=blob:none \
+            https://github.com/laravel/cloud-cli.git /tmp/cloud-cli
+          cd /tmp/cloud-cli
+          git sparse-checkout set skills/deploying-laravel-cloud
+          git checkout
+          cp -r skills/deploying-laravel-cloud/. \
+            $GITHUB_WORKSPACE/laravel-cloud/skills/deploying-laravel-cloud/
+
+      - name: Fetch nightwatch skills
+        run: |
+          git clone --no-checkout --depth 1 --filter=blob:none \
+            https://github.com/laravel/nightwatch.git /tmp/nightwatch
+          cd /tmp/nightwatch
+          git sparse-checkout set resources/boost/skills/configure-nightwatch
+          git checkout
+          cp -r resources/boost/skills/configure-nightwatch/. \
+            $GITHUB_WORKSPACE/laravel-nightwatch/skills/configure-nightwatch/
+
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: update skills from upstream'
+          file_pattern: 'laravel-cloud/skills/ laravel-nightwatch/skills/'

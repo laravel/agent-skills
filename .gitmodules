@@ -1,6 +1,0 @@
-[submodule "laravel-cloud/cloud-cli"]
-	path = laravel-cloud/cloud-cli
-	url = https://github.com/laravel/cloud-cli.git
-[submodule "laravel-nightwatch/nightwatch"]
-	path = laravel-nightwatch/nightwatch
-	url = https://github.com/laravel/nightwatch.git
