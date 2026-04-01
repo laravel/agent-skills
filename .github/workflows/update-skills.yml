@@ -20,7 +20,7 @@ jobs:
           git sparse-checkout set skills/deploying-laravel-cloud
           git checkout
           cp -r skills/deploying-laravel-cloud/. \
-            $GITHUB_WORKSPACE/laravel-cloud/skills/deploying-laravel-cloud/
+            $GITHUB_WORKSPACE/laravel/skills/deploying-laravel-cloud/
 
       - name: Fetch nightwatch skills
         run: |
@@ -30,7 +30,7 @@ jobs:
           git sparse-checkout set resources/boost/skills/configure-nightwatch
           git checkout
           cp -r resources/boost/skills/configure-nightwatch/. \
-            $GITHUB_WORKSPACE/laravel-nightwatch/skills/configure-nightwatch/
+            $GITHUB_WORKSPACE/laravel/skills/configure-nightwatch/
 
       - name: Commit updated skills
         uses: stefanzweifel/git-auto-commit-action@v7

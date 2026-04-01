@@ -1,9 +1,0 @@
-{
-    "name": "laravel-simplifier",
-    "version": "1.0.0",
-    "description": "Simplifies and refines PHP / Laravel code for clarity, consistency, and maintainability while preserving functionality",
-    "author": {
-        "name": "Taylor Otwell",
-        "email": "taylor@laravel.com"
-    }
-}
