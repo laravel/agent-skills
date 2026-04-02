@@ -18,6 +18,28 @@
         "name": "Taylor Otwell",
         "email": "taylor@laravel.com"
       }
+    },
+    {
+      "name": "laravel-cloud",
+      "displayName": "Laravel Cloud",
+      "source": "./laravel-cloud",
+      "description": "Deploying and managing apps on Laravel Cloud",
+      "version": "1.0.0",
+      "author": {
+        "name": "Taylor Otwell",
+        "email": "taylor@laravel.com"
+      }
+    },
+    {
+      "name": "laravel-nightwatch",
+      "displayName": "Laravel Nightwatch",
+      "source": "./laravel-nightwatch",
+      "description": "Configuring Laravel Nightwatch data collection, sampling, filtering, and redaction",
+      "version": "1.0.0",
+      "author": {
+        "name": "Taylor Otwell",
+        "email": "taylor@laravel.com"
+      }
     }
   ]
 }

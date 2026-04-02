@@ -10,9 +10,30 @@
   "plugins": [
     {
       "name": "laravel",
-      "displayName": "Laravel",
       "source": "./laravel",
       "description": "Agents and skills for PHP / Laravel development",
+      "version": "1.0.0",
+      "author": {
+        "name": "Taylor Otwell",
+        "email": "taylor@laravel.com"
+      },
+      "category": "productivity"
+    },
+    {
+      "name": "laravel-cloud",
+      "source": "./laravel-cloud",
+      "description": "Deploying and managing apps on Laravel Cloud",
+      "version": "1.0.0",
+      "author": {
+        "name": "Taylor Otwell",
+        "email": "taylor@laravel.com"
+      },
+      "category": "productivity"
+    },
+    {
+      "name": "laravel-nightwatch",
+      "source": "./laravel-nightwatch",
+      "description": "Configuring Laravel Nightwatch data collection, sampling, filtering, and redaction",
       "version": "1.0.0",
       "author": {
         "name": "Taylor Otwell",

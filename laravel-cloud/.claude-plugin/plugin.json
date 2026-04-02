@@ -1,7 +1,7 @@
 {
-  "name": "laravel",
+  "name": "laravel-cloud",
   "version": "1.0.0",
-  "description": "Agents and skills for PHP / Laravel development",
+  "description": "Deploying and managing apps on Laravel Cloud",
   "author": {
     "name": "Taylor Otwell",
     "email": "taylor@laravel.com"

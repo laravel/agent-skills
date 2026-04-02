@@ -1,0 +1,11 @@
+{
+  "name": "laravel-nightwatch",
+  "displayName": "Laravel Nightwatch",
+  "version": "1.0.0",
+  "description": "Configuring Laravel Nightwatch data collection, sampling, filtering, and redaction",
+  "author": {
+    "name": "Taylor Otwell",
+    "email": "taylor@laravel.com"
+  },
+  "mcpServers": "./.mcp.json"
+}

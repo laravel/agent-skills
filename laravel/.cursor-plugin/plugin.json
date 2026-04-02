@@ -6,6 +6,5 @@
   "author": {
     "name": "Taylor Otwell",
     "email": "taylor@laravel.com"
-  },
-  "mcpServers": "./.mcp.json"
+  }
 }

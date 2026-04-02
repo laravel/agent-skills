@@ -1,10 +1,10 @@
 # Laravel Agents & Skills
 
-A collection of agents and skills for PHP / Laravel development, available as a plugin for [Claude Code](https://code.claude.com/docs/en/plugins) and [Cursor](https://cursor.com/docs/plugins).
+A collection of agents and skills for PHP / Laravel development, available as plugins for [Claude Code](https://code.claude.com/docs/en/plugins) and [Cursor](https://cursor.com/docs/plugins).
 
-## What's Included
+## Plugins
 
-### laravel-simplifier (agent)
+### Laravel
 
 An agent that reviews recently modified PHP / Laravel code and refines it for clarity, consistency, and maintainability — without changing functionality.
 
@@ -13,7 +13,7 @@ An agent that reviews recently modified PHP / Laravel code and refines it for cl
 - Improves naming and readability
 - Focuses on recently modified code by default
 
-### deploying-laravel-cloud (skill)
+### Laravel Cloud
 
 A skill for deploying and managing applications on [Laravel Cloud](https://cloud.laravel.com) using the `cloud` CLI.
 
@@ -22,43 +22,34 @@ A skill for deploying and managing applications on [Laravel Cloud](https://cloud
 - Includes operational checklists for multi-step tasks
 - Follows the CRUD command patterns of the Cloud CLI
 
-### configure-nightwatch (skill)
+### Laravel Nightwatch
 
-A skill for configuring [Laravel Nightwatch](https://nightwatch.laravel.com) data collection, sampling rates, filtering rules, and redaction policies.
+A skill for configuring [Laravel Nightwatch](https://nightwatch.laravel.com) data collection, sampling rates, filtering rules, and redaction policies. Bundles the [Nightwatch MCP server](https://nightwatch.laravel.com/docs/mcp-server) for browsing issues, viewing stack traces, updating statuses, and adding comments.
 
 - Guides setup and configuration of Nightwatch in your application
 - Manages data volume through sampling and filtering
 - Protects sensitive data (PII) with redaction policies
 - Optimizes event collection for production workloads
 
-### Nightwatch MCP Server
-
-The plugin bundles the [Nightwatch MCP server](https://nightwatch.laravel.com/docs/mcp-server) — it is configured automatically when you install the plugin. This enables your AI assistant to browse issues, view stack traces, update statuses, and add comments.
-
 ## Installation
-
-### Skills CLI
-
-```bash
-npx skills add laravel/agent-skills
-```
 
 ### Claude Code
 
 ```
-/plugin marketplace add laravel/agent-skills
-/plugin install laravel@laravel
+/install laravel/agent-skills
 ```
 
 ### Cursor
 
-Search for **Laravel** in the [Cursor plugin marketplace](https://cursor.com/docs/plugins) panel and install it directly. The plugin can be scoped to a project or installed at the user level.
+Search for **Laravel** in the [Cursor plugin marketplace](https://cursor.com/docs/plugins) panel and install the plugins you need. Each plugin can be scoped to a project or installed at the user level.
 
 For local development, clone the repo and symlink into Cursor's local plugins directory:
 
 ```bash
 git clone https://github.com/laravel/agent-skills.git
 ln -s "$(pwd)/agent-skills/laravel" ~/.cursor/plugins/local/laravel
+ln -s "$(pwd)/agent-skills/laravel-cloud" ~/.cursor/plugins/local/laravel-cloud
+ln -s "$(pwd)/agent-skills/laravel-nightwatch" ~/.cursor/plugins/local/laravel-nightwatch
 ```
 
 **Team marketplace (Cursor Teams / Enterprise):**
@@ -73,20 +64,20 @@ See the [Cursor plugin reference](https://cursor.com/docs/reference/plugins) for
 
 ## Usage
 
-**laravel-simplifier** — invoke the agent after a coding session:
+**Laravel** — invoke the agent after a coding session:
 
 ```
 > Review recent changes using the laravel-simplifier agent
 ```
 
-**deploying-laravel-cloud** — triggers automatically when you ask about deploying or managing Laravel Cloud resources:
+**Laravel Cloud** — triggers automatically when you ask about deploying or managing Laravel Cloud resources:
 
 ```
 > Deploy my app to Laravel Cloud
 > Set up a database and cache for the staging environment
 ```
 
-**configure-nightwatch** — triggers when you ask about configuring Nightwatch:
+**Laravel Nightwatch** — triggers when you ask about configuring Nightwatch:
 
 ```
 > Configure Nightwatch sampling rates for production
