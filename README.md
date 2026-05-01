@@ -8,7 +8,7 @@ Laravel's official collection of agent skills, available as plugins for [Claude 
 
 ```
 /plugin marketplace add laravel/agent-skills
-/plugin install laravel-simplifier@laravel
+/plugin install laravel@laravel
 /plugin install laravel-cloud@laravel
 /plugin install laravel-nightwatch@laravel
 ```
@@ -34,7 +34,7 @@ npx skills add https://github.com/laravel/agent-skills/tree/main/laravel-nightwa
 **Laravel** invoke the agent after a coding session:
 
 ```
-> Review recent changes using the laravel-simplifier agent
+> Review recent changes using the laravel agent
 ```
 
 **Laravel Cloud** triggers automatically when you ask about deploying or managing Laravel Cloud resources:
