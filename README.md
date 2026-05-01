@@ -17,6 +17,18 @@ Laravel's official collection of agent skills, available as plugins for [Claude 
 
 Search for **Laravel** in the [Cursor plugin marketplace](https://cursor.com/docs/plugins) panel and install the plugins you need.
 
+### npx skills add
+
+Install individual skills directly from this repository:
+
+```sh
+# Laravel Cloud
+npx skills add https://github.com/laravel/agent-skills/tree/main/laravel-cloud/skills/deploying-laravel-cloud
+
+# Laravel Nightwatch
+npx skills add https://github.com/laravel/agent-skills/tree/main/laravel-nightwatch/skills/configure-nightwatch
+```
+
 ## Usage
 
 **Laravel** invoke the agent after a coding session:
