@@ -4,23 +4,17 @@
 #
 # Usage: classify_feature.sh <kit_dir> <sha> <user_repo>
 #
-# The SHA is used only to enumerate which files the feature touches.
-# Comparison is always against upstream's current state (HEAD of the branch
-# already checked out in <kit_dir> by fetch_kit.sh) — never against the
-# commit's parent. The user's git history is unrelated to the kit's history,
-# so "what was the file before the change" is not a meaningful concept on
-# their side.
+# The SHA enumerates which files the feature touches. Comparison is always
+# against upstream HEAD (already checked out in <kit_dir>). The user's git
+# history is unrelated to the kit's, so "what was the file before the change"
+# is not meaningful on their side.
 #
-# Per file, prints one TAB-separated line:
-#   <status>\t<path>
-#
-# Statuses:
-#   new              file does not exist in user repo and exists upstream
-#   already-present  user file is byte-identical to upstream's current file
-#                    (or both upstream and user lack the file)
-#   differs          user has the file but content differs from upstream's current
-#                    (also the case for files upstream has deleted but user kept)
-#   lockfile         composer/package manifest or lockfile (user-mediated only)
+# Per file, prints "<status>\t<path>". Statuses:
+#   new                 absent in user repo, exists at upstream HEAD
+#   already-present     user's bytes equal upstream HEAD's bytes
+#   differs             user has the file but bytes differ from upstream HEAD
+#   deleted-upstream    upstream HEAD lacks the file but the user still has it
+#   lockfile            composer/package manifest or lockfile (always user-mediated)
 #
 # All comparisons are byte-exact via diff(1).
 
@@ -32,20 +26,10 @@ user_repo="$3"
 
 is_lockfile() {
     case "$1" in
-        composer.json|composer.lock|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock)
+        composer.json|composer.lock|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock|bun.lockb|bun.lock)
             return 0 ;;
         *) return 1 ;;
     esac
-}
-
-# Returns 0 if the path exists at HEAD in the kit, 1 if not.
-upstream_has() {
-    git -C "$kit_dir" cat-file -e "HEAD:$1" 2>/dev/null
-}
-
-# Stream upstream's current file content to stdout (empty if missing).
-upstream_current() {
-    git -C "$kit_dir" show "HEAD:$1" 2>/dev/null || true
 }
 
 classify_one() {
@@ -57,9 +41,12 @@ classify_one() {
         return
     fi
 
-    if upstream_has "$path"; then
+    local upstream
+    upstream=$(mktemp)
+    # Single call: succeeds iff upstream has the file. No separate existence check.
+    if git -C "$kit_dir" show "HEAD:$path" >"$upstream" 2>/dev/null; then
         if [[ -e "$user_file" ]]; then
-            if upstream_current "$path" | diff -q - "$user_file" >/dev/null 2>&1; then
+            if diff -q "$upstream" "$user_file" >/dev/null 2>&1; then
                 printf "already-present\t%s\n" "$path"
             else
                 printf "differs\t%s\n" "$path"
@@ -68,17 +55,17 @@ classify_one() {
             printf "new\t%s\n" "$path"
         fi
     else
-        # Upstream no longer has this file at the branch tip
+        # Upstream HEAD doesn't have this path — only meaningful if the user still does.
         if [[ -e "$user_file" ]]; then
-            # User still has it — surface (could be intentional kept or deletion candidate)
-            printf "differs\t%s\n" "$path"
+            printf "deleted-upstream\t%s\n" "$path"
         else
             printf "already-present\t%s\n" "$path"
         fi
     fi
+    rm -f "$upstream"
 }
 
-# Use the feature commit only to enumerate which paths to look at.
+# diff-tree gives us the paths the feature touched; classification is against HEAD.
 git -C "$kit_dir" diff-tree --no-commit-id --name-only --no-renames -r "$sha" \
     | while IFS= read -r path; do
         [[ -z "${path:-}" ]] && continue

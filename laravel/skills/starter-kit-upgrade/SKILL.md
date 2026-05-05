@@ -5,87 +5,88 @@ description: Selectively pull upstream improvements from a Laravel starter kit (
 
 # Laravel Starter Kit Upgrade
 
-## Why this skill exists
+## Why
 
-Laravel's starter kits (`vue-starter-kit`, `react-starter-kit`, `livewire-starter-kit`) give you a working app to start from, but once you start and customize, you own the code. There's no plain way to pull in subsequent upstream improvements — toast notifications, security patches, dep bumps, the password visibility toggle, Teams support — without risking your customizations.
-
-This skill picks features one at a time from upstream and applies only those, with the highest priority being: do not change the application's existing behavior.
+- Users bootstrap from `laravel/vue-starter-kit`, `react-starter-kit`, or `livewire-starter-kit`, then customize. They own the code.
+- We pick **specific features** from upstream (e.g. "toast notifications", "2FA autofocus fix"), not "version upgrades."
+- The user's git history is unrelated to the kit's. There is no common ancestor. We compare user-now vs upstream-now, byte by byte.
+- We never auto-merge a customized file. Customizations are surfaced; the user decides.
+- Behavior preservation is the contract — the user's currently-passing tests/typecheck/build must still pass after.
 
 ## Safety contract — non-negotiable
 
 Read these to the user before any side effects, and live by them throughout:
 
-1. Working tree must be clean. If `git status` shows uncommitted changes, refuse to proceed and tell the user to commit or stash. Do not attempt to "stash for them."
+1. Working tree must be clean. If `git status --porcelain` is non-empty, refuse and tell the user to commit or stash. Do not "stash for them."
 2. All work happens on a dedicated branch (`starter-kit-upgrade/<short-id>`). The user's current branch is never modified.
-3. Each applied feature is its own commit. That is how revertability works — they can `git revert` or drop a single feature without losing the others.
-4. Never auto-resolve conflicts. If a change touches code the user has customized, surface it; default action is to skip the file. The user can opt to apply.
-5. Never silently overwrite manifests or lockfiles (`composer.json`, `package.json`, `*.lock`). Always show the diff and let the user decide.
-6. Verify behavior preservation. After applying, re-run the user's existing test/typecheck/build commands. A previously-passing check that now fails is a regression — stop, surface it, recommend revert.
-7. When uncertain, stop and ask. Best-effort guessing is forbidden. Guessing on someone's codebase is how trust dies.
+3. Each applied feature is its own commit. That is how revertability works.
+4. Never auto-resolve conflicts. A change touching customized code is surfaced; default action is to skip the file.
+5. Never silently overwrite manifests or lockfiles (`composer.json`, `package.json`, `*-lock.*`). Show diffs; let the user decide.
+6. Verify behavior preservation. Re-run the user's tests/typecheck/build after applying. A previously-passing check that now fails is a regression — stop, surface, recommend revert.
+7. Detect from unambiguous signals; ask when ambiguous. Concrete evidence (e.g. `config/fortify.php` exists) is fine. Picking a likely answer when signals are mixed or absent is not.
 
-If any of these fail, abort the skill with a clear message about what went wrong and how the user can recover.
+If any of these is violated, abort with a clear message about what went wrong and how to recover.
 
 ## Required tools
 
 - `git` (in the user's project)
-- `gh` (GitHub CLI, authenticated — `gh auth status` returns OK)
+- `gh` (authenticated — `gh auth status` returns OK)
+- `jq` (used by `run_tests.sh`)
 - `bash` (for the bundled scripts)
+
+If any is missing, stop in Phase 4 and tell the user how to install.
 
 ## Workflow
 
-The flow has eight phases. Do them in order. Don't skip ahead — each phase establishes invariants the next relies on.
+Eight phases, in order. Each phase establishes invariants the next relies on.
 
 ### Phase 1 — Identify the kit and branch variant
 
 Inspect the user's project:
 
-|   | vue                         | react                       | livewire                          |
-|---|-----------------------------|-----------------------------|-----------------------------------|
-| Cue | `.vue` files in `resources/js/components/ui/` | `.tsx` files in `resources/js/components/ui/` | no `resources/js/components/ui/` dir |
-| `package.json` has | `"vue"` + `"@inertiajs/vue3"` | `"react"` + `"@inertiajs/react"` | n/a |
-| `composer.json` has | n/a | n/a | `"livewire/livewire"` + `"livewire/flux"` |
+|                     | vue                                           | react                                         | livewire                                  |
+| ------------------- | --------------------------------------------- | --------------------------------------------- | ----------------------------------------- |
+| Cue                 | `.vue` files in `resources/js/components/ui/` | `.tsx` files in `resources/js/components/ui/` | no `resources/js/components/ui/` dir      |
+| `package.json` has  | `"vue"` + `"@inertiajs/vue3"`                 | `"react"` + `"@inertiajs/react"`              | n/a                                       |
+| `composer.json` has | n/a                                           | n/a                                           | `"livewire/livewire"` + `"livewire/flux"` |
 
-State the detected kit out loud and ask the user to confirm.
+State the detected kit out loud. If only one column matches, proceed. If two columns partially match (e.g. both `.vue` and `.tsx` present, or `package.json` lists both `vue` and `react`), stop and ask.
 
-Then determine the branch variant — `main` (Fortify auth) or `workos` (WorkOS auth) — by inspecting the user's repo. Signals are unambiguous:
+Then determine the branch variant — `main` (Fortify auth) or `workos` (WorkOS auth):
 
 - `main` if `composer.json` has `laravel/fortify`, or `config/fortify.php` exists, or `app/Actions/Fortify/` exists, or `app/Providers/FortifyServiceProvider.php` exists.
-- `workos` if `composer.json` has `laravel/workos` and none of the Fortify markers above are present.
+- `workos` if `composer.json` has `laravel/workos` and none of the Fortify markers are present.
 
-State the detected branch out loud. Only ask explicitly if the signals are contradictory (some Fortify markers present *and* `laravel/workos` in composer) — that means the user has done something custom and you can't safely guess.
+Only ask if signals are contradictory (Fortify markers present _and_ `laravel/workos` in composer) — that means user customization you can't safely guess at.
 
 ### Phase 2 — Enumerate available upstream features
 
-The user can't tell you "what version they're on" reliably (and we don't try). Instead, look at what's recently happened upstream and present it as a feature catalog.
+The user can't tell you "what version they're on" reliably (and we don't try). Inspect upstream as it exists today and present a feature catalog.
 
-Use `gh` to fetch the raw data:
+Fetch raw data:
 
 ```bash
-# Recent commits on the chosen branch
 gh api "repos/laravel/<kit>/commits?sha=<branch>&per_page=100" \
   -q '.[] | {sha: .sha[0:7], date: .commit.author.date[0:10], msg: .commit.message | split("\n")[0]}'
 
-# Recent merged PRs targeting the branch (richer descriptions)
 gh pr list --repo "laravel/<kit>" --state merged --base "<branch>" --limit 100 \
   --json number,title,mergeCommit,mergedAt
 ```
 
-Then cluster commits/PRs into user-facing features. This is the part you reason about — the data is deterministic, but turning a list of commits into a coherent catalog requires judgment. Examples a user would recognize:
+Cluster commits/PRs into user-facing features. Examples a user would recognize:
 
 - "Toast notifications across all kits" (1 commit, several files)
-- "Password visibility toggle in auth forms" (1 commit)
+- "Password visibility toggle in auth forms" (1 commit, 3 files)
 - "2FA autofocus fix" (1 commit, 1 file)
 - "Teams support" (1 PR, many files — flag as large)
 - "Inertia 3 upgrade" (lockfile-heavy — flag as needing review)
-- "Maintenance: formatting / dep tidying" (bucket of small commits)
+- "Maintenance: formatting / lint config" (bucket of small commits)
 
-Group internal/refactor commits (formatting, lint config) under a single "Maintenance" entry.
+Bucket internal/refactor commits as a single "Maintenance" entry. The user usually skips it.
 
-Filter against what the user already has. For each candidate feature, run `scripts/classify_feature.sh` against the feature commit: if every file is `already-present`, mark with `[!] Already present` and skip by default.
+Pre-filter: for each candidate feature, run `scripts/classify_feature.sh` against its commit. If every file is `already-present`, mark `[!] Already present` and skip by default.
 
 ### Phase 3 — Present the catalog and get explicit selection
-
-Show the user a checklist:
 
 ```
 Available upstream features (vue-starter-kit, branch: main):
@@ -100,27 +101,31 @@ Available upstream features (vue-starter-kit, branch: main):
 Which would you like to pull in?
 ```
 
-Wait for the user's selection. Recap the picks plus affected file counts, and ask one final time before any side effects.
+Wait for the selection. Recap the picks and the affected file counts. Ask one final time before any side effects.
 
 ### Phase 4 — Preflight, baseline, and workspace setup
 
-Verify the working tree is clean, `gh` is available and authenticated:
+Verify clean state:
 
 ```bash
-git -C <user_repo> rev-parse --is-inside-work-tree >/dev/null  # is a git repo
-[[ -z "$(git -C <user_repo> status --porcelain)" ]]            # clean tree
-gh auth status                                                  # gh authenticated
+git -C <user_repo> rev-parse --is-inside-work-tree >/dev/null
+[[ -z "$(git -C <user_repo> status --porcelain)" ]]
+gh auth status
+command -v jq >/dev/null
 ```
 
-If any check fails, stop with a clear message about what's wrong and how to fix.
+Any failure → stop with a clear message about which check failed and how to fix.
 
-Record a verification baseline so Phase 7 can distinguish regressions from pre-existing failures:
+Record a verification baseline so Phase 7 can distinguish regressions from pre-existing failures. Use `mktemp` so concurrent runs don't clobber each other:
 
 ```bash
-scripts/run_tests.sh <user_repo> --baseline /tmp/skup-baseline.json
+baseline=$(mktemp -t skup-baseline.XXXXXX.json)
+scripts/run_tests.sh <user_repo> --baseline "$baseline"
 ```
 
-Fetch the upstream kit into a working cache:
+Hold onto `$baseline` — Phase 7 needs it.
+
+Fetch the upstream kit:
 
 ```bash
 git clone --quiet --depth 500 --branch <branch> \
@@ -133,30 +138,32 @@ Create the upgrade branch:
 git -C <user_repo> checkout -b "starter-kit-upgrade/$(date +%Y%m%d-%H%M)-<first-slug>"
 ```
 
-From this point on, every write goes to this branch. The user's previous branch is untouched.
+From this point on, every write goes to this branch.
 
 ### Phase 5 — Apply each selected feature
 
 For each selected feature, in order:
 
-**1. Classify.** Run `scripts/classify_feature.sh <kit_dir> <sha> <user_repo>` for the feature's commit SHA. Statuses:
+1. Classify. Run `scripts/classify_feature.sh <kit_dir> <sha> <user_repo>`. Statuses:
 
-- `new` — file does not exist in the user's repo, exists upstream. Safe to add.
-- `already-present` — user's file already matches upstream's current version. Skip.
-- `differs` — user has the file and content differs from upstream's current. Surface to the user.
-- `lockfile` — `composer.json` / `package.json` / lock files. Surface to the user.
+- `new` — file does not exist in user repo, exists at upstream HEAD. Safe to add.
+- `already-present` — user's file is byte-identical to upstream HEAD. Skip.
+- `differs` — user has the file and bytes differ from upstream HEAD. Surface.
+- `deleted-upstream` — upstream HEAD lacks the file but the user has it. Surface; default is keep theirs.
+- `lockfile` — manifest or lock file. Surface; never auto-merge.
 
-The classifier compares only against upstream's current state of each file. The user's git history is unrelated to the kit's history; "what was the file before the change" is not meaningful on the user's side. The feature commit is used only to enumerate which files to consider.
+The classifier compares only against upstream HEAD. The user's git history doesn't trace back to the kit's, so there's no "before-image" baseline to merge against — we don't try. The feature commit just enumerates which paths to look at.
 
-**2. Cumulative-bleed check.** Before applying anything, for each file the feature touches, check whether later upstream commits also modified it:
+2. Cumulative-bleed check. Find which feature paths _later_ upstream commits also modified — one git invocation, not one per file:
 
 ```bash
-git -C <kit_dir> log --oneline <sha>..HEAD -- <path>
+paths=$(scripts/classify_feature.sh <kit_dir> <sha> <user_repo> | cut -f2)
+git -C <kit_dir> log --name-only --pretty=format: <sha>..HEAD -- $paths | sort -u
 ```
 
-If later commits show up, copying upstream's current content will pull *those* changes in too — not just this feature. Diff `<sha>:<path>` against `HEAD:<path>`; if the difference is material, manually scope to the feature commit's content (`git -C <kit_dir> show <sha>:<path>`) instead of HEAD's, and mention it in the report.
+For any returned path, copying upstream HEAD's content pulls _those_ later changes in too. Diff `<sha>:<path>` against `HEAD:<path>`; if a non-whitespace hunk differs, scope to the feature commit (`git -C <kit_dir> show <sha>:<path>`) and note it in the report.
 
-**3. Apply `new` files.** Loop over the classifier output and write upstream's content for each `new` path. Five-line snippet:
+**3. Apply `new` files.** Loop over the classifier output:
 
 ```bash
 scripts/classify_feature.sh <kit_dir> <sha> <user_repo> \
@@ -168,31 +175,32 @@ scripts/classify_feature.sh <kit_dir> <sha> <user_repo> \
     done
 ```
 
-**4. Transitive-imports check (for each new file you applied).** New files often import helpers that aren't in the same feature commit. Quick scan:
+Before staging each `new` path, check for the rename gotcha (see Gotchas → "Renamed paths").
+
+**4. Transitive-imports check.** New files often import helpers that aren't in the same feature commit. Scan all applied `new` files in one grep — pattern depends on the kit:
 
 ```bash
-grep -E "from ['\"]@?/?(lib|components|utils)/" <user_repo>/<new_file>
+# Vue / React: TS/JS imports with @, ~, ./, ../ aliases
+grep -EHn "from ['\"](@/|~/|\\./|\\.\\./)" <new_files...> 2>/dev/null
+
+# Livewire: Blade includes, components, livewire tags
+grep -EHn "@(include|extends|component|livewire)\\(|<x-|<livewire:" <new_files...> 2>/dev/null
 ```
 
-For each import, verify the target exists in the user's repo. If not, the feature's `new` files will fail to compile. Flag these as `differs`-equivalent and walk the user through fetching the missing dependency from upstream.
+For each import target, verify the corresponding file exists in the user's repo. If not, the new files won't compile/render — flag the missing target as a follow-up dependency the user needs to fetch (same walkthrough as `differs`).
 
-**5. Walk the user through `differs` and `lockfile`.** One file at a time:
+**5. Walk the user through `differs`, `deleted-upstream`, and `lockfile`.** One file at a time:
 
-- Show what upstream has: `git -C <kit_dir> show HEAD:<path>` (or `<sha>:<path>` if cumulative bleed is a concern)
-- Show their current file
-- Show the diff
-- Ask the user to pick:
-  - Take upstream wholesale. Overwrite their file. Their customizations are lost — confirm before doing it.
-  - Keep theirs. Do nothing. File stays as is.
-  - Merge by hand. Open in their editor. You produce a unified diff for reference; they write the result.
-- Default if they're unsure: keep theirs (preserves behavior).
+- Show what upstream has: `git -C <kit_dir> show HEAD:<path>` (or `<sha>:<path>` if cumulative bleed flagged this path).
+- Show their current file.
+- Show the diff between the two.
+- Ask the user to pick: take upstream wholesale (lossy — confirm first), keep theirs, or merge by hand (you produce a unified diff for reference; they write the result).
+- If they're unsure, ask once more with the diff in front of them. Still unsure → keep theirs and move on. Don't pick silently.
 - Stage whatever they chose: `git -C <user_repo> add <path>`.
 
-**6. Watch for parallel implementations.** When a feature has `new` files plus `differs` to call sites, the user may already have an in-house equivalent (e.g. their own toast helper, their own validation rule). Surface as a whole — don't apply the `new` files in isolation as if they're "safe."
+For `lockfile`: never overwrite the manifest. Show the upstream diff for `composer.json` / `package.json`, walk them through the relevant change, let them edit the manifest. Lockfile regeneration happens in Phase 6.
 
-**7. Watch for renamed paths.** If a feature's path classifies as `new` but a file with the same basename or class name already exists elsewhere in the user's repo, surface — don't auto-apply, or you'll create a duplicate.
-
-**8. Commit the feature as one revertable unit:**
+**6. Commit the feature as one revertable unit:**
 
 ```bash
 git -C <user_repo> commit -m "starter-kit-upgrade: <feature name>
@@ -204,19 +212,23 @@ Files updated (manual merge): <list>
 Files kept as-is: <list>"
 ```
 
-If the user wants to bail out at any point, leave the upgrade branch as-is.
+If the user wants to bail out at any point, leave the branch as-is. They can drop it with `git branch -D`.
 
 ### Phase 6 — Reconcile manifests if needed
 
-If any feature touched `composer.json` or `package.json`, the lockfiles are out of sync. Run only after the user agrees:
+If any feature touched a manifest, lockfiles are out of sync. After the user agrees:
 
 - `composer install` if `composer.lock` exists and `composer.json` was edited.
-- `pnpm install` / `npm install` / `bun install` / `yarn install` (auto-detect from existing lockfile in the repo).
+- For JS, auto-detect the package manager from the existing lockfile in the repo:
+  - `pnpm-lock.yaml` → `pnpm install`
+  - `bun.lockb` or `bun.lock` → `bun install`
+  - `yarn.lock` → `yarn install`
+  - `package-lock.json` (or none) → `npm install`
 
-If `npm install` fails with `ERESOLVE` after a major-version manifest bump (e.g. Vite v7 → v8, React 18 → 19), stale `node_modules` is the usual cause. Clean and reinstall:
+If install fails with `ERESOLVE` after a major-version manifest bump (e.g. Vite v7 → v8, React 18 → 19), stale `node_modules` is the usual cause. Clean and reinstall:
 
 ```bash
-rm -rf node_modules package-lock.json   # or pnpm-lock.yaml, etc.
+rm -rf node_modules <lockfile>
 <package-manager> install
 ```
 
@@ -224,26 +236,26 @@ Commit lockfile updates as a separate `starter-kit-upgrade: dependency lockfiles
 
 ### Phase 7 — Verify behavior preservation
 
-Run the verification suite and compare against the baseline recorded in Phase 4:
+Compare against the baseline:
 
 ```bash
-scripts/run_tests.sh <user_repo> --compare /tmp/skup-baseline.json
+scripts/run_tests.sh <user_repo> --compare "$baseline"
 ```
 
-The compare mode runs PHP tests, JS typecheck, and JS build (whichever exist), and reports only checks that were *passing* in the baseline and now fail. That's the regression set — pre-existing failures are not the upgrade's fault and should not block.
+Compare mode runs PHP tests, JS typecheck, JS build (whichever exist) and reports only checks that were passing in the baseline and now fail. Pre-existing failures are not the upgrade's fault and don't block.
 
-If any regression is reported:
+If a regression is reported:
 
-- Show the user the failing output.
-- Recommend `git revert HEAD` to drop the most recently applied feature first; if that doesn't fix it, revert the previous one too.
-- For multiple-feature uncertainty, suggest `git bisect start <upgrade-branch> <previous-branch>`.
-- Do not attempt to "fix" the failing checks by editing code. That violates the behavior contract.
+- Show the failing output from the per-check log file the script points to.
+- Recommend `git revert HEAD` first; if that doesn't fix it, revert again.
+- For multi-feature uncertainty, suggest `git bisect start <upgrade-branch> <previous-branch>`.
+- Do not edit code to make the failing check pass — that violates the behavior contract.
 
-If the project has no discoverable verification commands at all, say so explicitly in the report — don't pretend verification happened.
+If the project has no discoverable verification commands, say so explicitly in the report. Don't pretend verification happened.
 
 ### Phase 8 — Write the report
 
-Write `STARTER_KIT_UPGRADE.md` at the repo root:
+Write to `/tmp/starter-kit-upgrade-report.md` first — never silently into the user's repo. Show the path and ask whether they want it copied in as `STARTER_KIT_UPGRADE.md` or kept out of tree.
 
 ```markdown
 # Starter Kit Upgrade Report
@@ -254,56 +266,57 @@ Write `STARTER_KIT_UPGRADE.md` at the repo root:
 - Upgrade branch: starter-kit-upgrade/<id>
 
 ## Features applied
+
 - <feature name> — laravel/<kit>@<sha> — <N files>
   - Applied: <list>
   - Skipped: <list with reasons>
   - Manual decisions: <if any, with reasoning>
-  - Cumulative bleed avoided: <if any, with the path(s) you scoped manually>
+  - Cumulative bleed avoided: <if any, with paths scoped manually>
 
 ## Lockfile updates
+
 <which lock files were regenerated and how>
 
 ## Verification
+
 - Baseline: <path or summary>
 - Result: <PASS / REGRESSED:<list> / NO-CHECKS>
 - Output: <relevant snippet>
 
 ## How to revert
+
 - Drop a single feature: `git revert <commit-sha>`
 - Discard everything: `git checkout <previous-branch> && git branch -D starter-kit-upgrade/<id>`
 ```
 
-This file is the user's audit trail. They can commit it or `.gitignore` it.
+## Gotchas
 
-## Cross-kit watch list
+Environment-specific behavior the agent will get wrong without being told. Read these before Phase 5 and apply throughout.
 
-Patterns that need special handling regardless of which kit:
+- **Parallel implementations.** When a feature has `new` files plus `differs` to call sites, the user may already have an in-house equivalent (their own toast helper, validation rule, etc.). Surface as a whole — don't apply the `new` files in isolation as if they're "safe." Default action is to skip the entire feature; the user can opt to adopt upstream's version and remove theirs later.
 
-| # | Pattern | What to do |
-|---|---|---|
-| 1 | Lockfile change (`composer.json`, `package.json`, `*-lock.*`) | Never auto-merge. Show diff, user edits manifest, re-run pkg manager. |
-| 2 | New migration (e.g. "Catch migrations up to Skeleton") | Surface separately. Recommend `php artisan migrate:status` before applying. New migrations on populated DBs can fail. |
-| 3 | Major framework bump (Inertia v2→v3, Laravel major) | Too large for feature-by-feature application. Flag and recommend manual upgrade pass. |
-| 4 | WorkOS vs main mismatch | The `gh api ?sha=<branch>` call already restricts enumeration to the chosen branch — double-check before applying. |
-| 5 | Renamed paths (user moved a file) | Classifier returns `new` for the original path. Scan for basename match elsewhere; surface if found. |
-| 6 | Cumulative bleed (later commits also touch the feature's files) | `git log <sha>..HEAD -- <path>`. If non-empty, scope to `<sha>:<path>` instead of `HEAD:<path>`. |
-| 7 | Transitive imports in new files | Grep imports of new files; verify each target exists in the user repo before declaring success. |
+- **Renamed paths.** If a `new` path's basename or class name already exists elsewhere in the user's repo, the user has likely renamed/moved it. Surface, don't auto-apply, or you'll create a duplicate. Show them the upstream change and let them apply it to their renamed file by hand or wait for user confirmation.
 
-## Bail-out conditions
+- **Cumulative bleed.** Copying upstream HEAD pulls in _every_ commit since the feature, not just the feature's own changes. Always run the Phase 5 step 2 check before applying. When bleed is real, scope to `<sha>:<path>` instead of `HEAD:<path>`.
 
-Stop and surface to the user when:
+- **Transitive imports.** New files often `import` from helpers that are NOT in the same feature commit (Vue/React: `@/lib/...`, `@/components/...`; Livewire: `@include`, `<x-...>`, `<livewire:...>`). Phase 5 step 4 covers the scan; never declare a feature applied without it — uncovered imports show up as runtime/compile errors.
 
-- The working tree is dirty.
-- You can't determine which kit they're using and they can't confirm.
-- They selected a feature whose commit can't be fetched.
-- More than ~50 files would `differ` in a single feature — recommend manual upgrade for that feature.
-- A regression appears in Phase 7 verification.
-- Anything else you didn't expect. Tell the user what you saw.
+- **Lockfile drift.** Manifests are user-curated. Never overwrite. Walk the user through the upstream diff, let them merge, then regenerate lockfiles via the package manager (Phase 6).
 
-## Things this skill does NOT do
+- **Stale node_modules after major bumps.** After Vite v7 → v8, React 18 → 19, etc., `npm install` often fails with `ERESOLVE`. Clean and reinstall (Phase 6).
 
-- Detect which "version" the user started from. There is no reliable way; we don't pretend.
-- Reconcile dep version constraints automatically. We show, the user decides.
-- Handle forks of the starter kits. If the user's repo's structure isn't recognizable as one of the three official kits, refuse and explain.
-- Migrate across kits (e.g., Vue → React). Out of scope.
-- Run linters / formatters on applied files. The user runs their own tooling.
+- **New migrations.** When upstream adds migrations (e.g. "Catch migrations up to Skeleton"), surface them separately. Recommend `php artisan migrate:status` first — applying a new migration on a populated DB can fail loudly.
+
+- **Major framework bumps as features.** Things like Inertia v2→v3 or a Laravel major-version bump are too large for the feature-by-feature flow. Flag and recommend a dedicated manual upgrade pass instead. The agent should not attempt them through this skill.
+
+- **Already-present features.** If Phase 2's pre-filter missed it and Phase 5's classifier reports every file as `already-present`, skip the feature with a note: "every file matches upstream's current — moving on." Don't commit an empty commit.
+
+- **More than ~50 `differs`.** The per-file walkthrough is too tedious to be useful at that scale. Stop, recommend manual upgrade for that feature.
+
+## Out of scope
+
+- Detecting which kit "version" the user started from. There is no reliable way; we don't pretend.
+- Reconciling dep version constraints automatically. We show; the user decides.
+- Forks of the starter kits. If the repo's structure isn't recognizable as one of the three official kits, refuse and explain.
+- Cross-kit migration (e.g. Vue → React).
+- Running linters / formatters on applied files. The user runs their own tooling.
