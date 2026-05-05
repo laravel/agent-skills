@@ -43,6 +43,7 @@ classify_one() {
 
     local upstream
     upstream=$(mktemp)
+
     # Single call: succeeds iff upstream has the file. No separate existence check.
     if git -C "$kit_dir" show "HEAD:$path" >"$upstream" 2>/dev/null; then
         if [[ -e "$user_file" ]]; then
@@ -62,6 +63,7 @@ classify_one() {
             printf "already-present\t%s\n" "$path"
         fi
     fi
+
     rm -f "$upstream"
 }
 
