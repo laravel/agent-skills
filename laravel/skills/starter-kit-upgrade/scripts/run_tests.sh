@@ -68,14 +68,15 @@ has_npm_script() {
 discover_php_tests() {
     if [[ -f composer.json ]] && jq -e '.scripts.test // empty' composer.json >/dev/null 2>&1; then
         echo "composer test"
-    elif [[ -x vendor/bin/pest ]];    then echo "vendor/bin/pest"
+    elif [[ -x vendor/bin/pest ]]; then echo "vendor/bin/pest"
     elif [[ -x vendor/bin/phpunit ]]; then echo "vendor/bin/phpunit"
-    elif [[ -f artisan ]];            then echo "php artisan test"
+    elif [[ -f artisan ]]; then echo "php artisan test"
     fi
 }
 
 discover_js_typecheck() {
     local pm; pm=$(js_package_manager) || return 0
+
     for s in types typecheck tsc; do
         if has_npm_script "$s"; then echo "$pm run $s"; return; fi
     done
@@ -83,6 +84,7 @@ discover_js_typecheck() {
 
 discover_js_build() {
     local pm; pm=$(js_package_manager) || return 0
+
     has_npm_script build && echo "$pm run build"
 }
 
@@ -127,6 +129,7 @@ case "$mode" in
     run)
         results=$(build_results)
         echo "$results"
+
         # Exit 1 if anything that ran failed.
         if [[ $(echo "$results" | jq '[.. | objects | select(.passed == false)] | length') -gt 0 ]]; then
             exit 1
@@ -140,8 +143,10 @@ case "$mode" in
 
     compare)
         [[ -f "$ref" ]] || { echo "ERROR: baseline '$ref' not found" >&2; exit 2; }
+
         post=$(build_results)
         regressed=0
+
         for label in php_tests js_typecheck js_build; do
             was_pass=$(jq -r --arg l "$label" '.[$l].passed == true' "$ref")
             is_fail=$(echo "$post" | jq -r --arg l "$label" '.[$l].passed == false')
@@ -151,6 +156,7 @@ case "$mode" in
                 regressed=1
             fi
         done
+
         echo "$post"
         exit $regressed
         ;;
