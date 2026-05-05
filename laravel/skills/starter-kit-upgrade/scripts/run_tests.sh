@@ -49,7 +49,7 @@ esac
 cd "$repo"
 
 # Pick the JS package manager; only meaningful when package.json exists.
-js_pm() {
+js_package_manager() {
     [[ -f package.json ]] || return 1
     if   [[ -f pnpm-lock.yaml ]];    then echo pnpm
     elif [[ -f bun.lockb || -f bun.lock ]]; then echo bun
@@ -75,14 +75,14 @@ discover_php_tests() {
 }
 
 discover_js_typecheck() {
-    local pm; pm=$(js_pm) || return 0
+    local pm; pm=$(js_package_manager) || return 0
     for s in types typecheck tsc; do
         if has_npm_script "$s"; then echo "$pm run $s"; return; fi
     done
 }
 
 discover_js_build() {
-    local pm; pm=$(js_pm) || return 0
+    local pm; pm=$(js_package_manager) || return 0
     has_npm_script build && echo "$pm run build"
 }
 
