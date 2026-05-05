@@ -34,6 +34,30 @@ If any of these is violated, abort with a clear message about what went wrong an
 
 If any is missing, stop in Phase 4 and tell the user how to install.
 
+## Gotchas
+
+Environment-specific behavior the agent will get wrong without being told. Read these before starting the workflow and apply throughout.
+
+- **Parallel implementations.** When a feature has `new` files plus `differs` to call sites, the user may already have an in-house equivalent (their own toast helper, validation rule, etc.). Surface as a whole; don't apply the `new` files in isolation as if they're "safe." Default action is to skip the entire feature; the user can opt to adopt upstream's version and remove theirs later.
+
+- **Renamed paths.** If a `new` path's basename or class name already exists elsewhere in the user's repo, the user has likely renamed/moved it. Surface, don't auto-apply, or you'll create a duplicate. Show them the upstream change and let them apply it to their renamed file by hand or wait for user confirmation.
+
+- **Cumulative bleed.** Copying upstream HEAD pulls in _every_ commit since the feature, not just the feature's own changes. Always run the Phase 5 step 2 check before applying. When bleed is real, scope to `<sha>:<path>` instead of `HEAD:<path>`.
+
+- **Transitive imports.** New files often `import` from helpers that are NOT in the same feature commit (Vue/React: `@/lib/...`, `@/components/...`; Livewire: `@include`, `<x-...>`, `<livewire:...>`). Phase 5 step 4 covers the scan; never declare a feature applied without it. Uncovered imports show up as runtime/compile errors.
+
+- **Lockfile drift.** Manifests are user-curated. Never overwrite. Walk the user through the upstream diff, let them merge, then regenerate lockfiles via the package manager (Phase 6).
+
+- **Stale node_modules after major bumps.** After Vite v7 → v8, React 18 → 19, etc., `npm install` often fails with `ERESOLVE`. Clean and reinstall (Phase 6).
+
+- **New migrations.** When upstream adds migrations (e.g. "Catch migrations up to Skeleton"), surface them separately. Recommend `php artisan migrate:status` first; applying a new migration on a populated DB can fail loudly.
+
+- **Major framework bumps as features.** Things like Inertia v2→v3 or a Laravel major-version bump are too large for the feature-by-feature flow. Flag and recommend a dedicated manual upgrade pass instead. The agent should not attempt them through this skill.
+
+- **Already-present features.** If Phase 2's pre-filter missed it and Phase 5's classifier reports every file as `already-present`, skip the feature with a note: "every file matches upstream's current; moving on." Don't commit an empty commit.
+
+- **More than ~50 `differs`.** The per-file walkthrough is too tedious to be useful at that scale. Stop, recommend manual upgrade for that feature.
+
 ## Workflow
 
 Eight phases, in order. Each phase establishes invariants the next relies on.
@@ -61,7 +85,7 @@ Only ask if signals are contradictory (Fortify markers present _and_ `laravel/wo
 
 The user can't tell you "what version they're on" reliably (and we don't try). Inspect upstream as it exists today and present a feature catalog.
 
-Fetch raw data:
+Fetch raw data. The default window is the **last 100 commits / merged PRs**; tell the user that up front so they know features older than that won't appear in the catalog. If they bootstrapped well before that window, walk back with `&page=2`, `&page=3`, etc. or raise `--limit`.
 
 ```bash
 gh api "repos/laravel/<kit>/commits?sha=<branch>&per_page=100" \
@@ -103,16 +127,13 @@ Wait for the selection. Recap the picks and the affected file counts. Ask one fi
 
 ### Phase 4: Preflight, baseline, and workspace setup
 
-Verify clean state:
+Run preflight:
 
 ```bash
-git -C <user_repo> rev-parse --is-inside-work-tree >/dev/null
-[[ -z "$(git -C <user_repo> status --porcelain)" ]]
-gh auth status
-command -v jq >/dev/null
+scripts/preflight.sh <user_repo>
 ```
 
-Any failure: stop with a clear message about which check failed and how to fix.
+It checks the repo is a git repo, the tree is clean, and that `gh` (authenticated) and `jq` are available. If it exits non-zero, surface the message verbatim and stop.
 
 Record a verification baseline so Phase 7 can distinguish regressions from pre-existing failures. Use `mktemp` so concurrent runs don't clobber each other:
 
@@ -286,30 +307,6 @@ Write to `/tmp/starter-kit-upgrade-report.md` first; never silently into the use
 - Drop a single feature: `git revert <commit-sha>`
 - Discard everything: `git checkout <previous-branch> && git branch -D starter-kit-upgrade/<id>`
 ```
-
-## Gotchas
-
-Environment-specific behavior the agent will get wrong without being told. Read these before Phase 5 and apply throughout.
-
-- **Parallel implementations.** When a feature has `new` files plus `differs` to call sites, the user may already have an in-house equivalent (their own toast helper, validation rule, etc.). Surface as a whole; don't apply the `new` files in isolation as if they're "safe." Default action is to skip the entire feature; the user can opt to adopt upstream's version and remove theirs later.
-
-- **Renamed paths.** If a `new` path's basename or class name already exists elsewhere in the user's repo, the user has likely renamed/moved it. Surface, don't auto-apply, or you'll create a duplicate. Show them the upstream change and let them apply it to their renamed file by hand or wait for user confirmation.
-
-- **Cumulative bleed.** Copying upstream HEAD pulls in _every_ commit since the feature, not just the feature's own changes. Always run the Phase 5 step 2 check before applying. When bleed is real, scope to `<sha>:<path>` instead of `HEAD:<path>`.
-
-- **Transitive imports.** New files often `import` from helpers that are NOT in the same feature commit (Vue/React: `@/lib/...`, `@/components/...`; Livewire: `@include`, `<x-...>`, `<livewire:...>`). Phase 5 step 4 covers the scan; never declare a feature applied without it. Uncovered imports show up as runtime/compile errors.
-
-- **Lockfile drift.** Manifests are user-curated. Never overwrite. Walk the user through the upstream diff, let them merge, then regenerate lockfiles via the package manager (Phase 6).
-
-- **Stale node_modules after major bumps.** After Vite v7 → v8, React 18 → 19, etc., `npm install` often fails with `ERESOLVE`. Clean and reinstall (Phase 6).
-
-- **New migrations.** When upstream adds migrations (e.g. "Catch migrations up to Skeleton"), surface them separately. Recommend `php artisan migrate:status` first; applying a new migration on a populated DB can fail loudly.
-
-- **Major framework bumps as features.** Things like Inertia v2→v3 or a Laravel major-version bump are too large for the feature-by-feature flow. Flag and recommend a dedicated manual upgrade pass instead. The agent should not attempt them through this skill.
-
-- **Already-present features.** If Phase 2's pre-filter missed it and Phase 5's classifier reports every file as `already-present`, skip the feature with a note: "every file matches upstream's current; moving on." Don't commit an empty commit.
-
-- **More than ~50 `differs`.** The per-file walkthrough is too tedious to be useful at that scale. Stop, recommend manual upgrade for that feature.
 
 ## Out of scope
 

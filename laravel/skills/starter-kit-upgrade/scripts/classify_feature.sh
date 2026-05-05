@@ -24,22 +24,16 @@ kit_dir="$1"
 sha="$2"
 user_repo="$3"
 
-is_lockfile() {
-    case "$1" in
-        composer.json|composer.lock|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock|bun.lockb|bun.lock)
-            return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
-classify_one() {
+classify() {
     local path="$1"
     local user_file="$user_repo/$path"
 
-    if is_lockfile "$path"; then
-        printf "lockfile\t%s\n" "$path"
-        return
-    fi
+    case "$path" in
+        composer.json|composer.lock|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock|bun.lockb|bun.lock)
+            printf "lockfile\t%s\n" "$path"
+            return
+            ;;
+    esac
 
     local upstream
     upstream=$(mktemp)
@@ -71,5 +65,5 @@ classify_one() {
 git -C "$kit_dir" diff-tree --no-commit-id --name-only --no-renames -r "$sha" \
     | while IFS= read -r path; do
         [[ -z "${path:-}" ]] && continue
-        classify_one "$path"
+        classify "$path"
     done
