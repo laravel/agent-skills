@@ -45,7 +45,12 @@ Inspect the user's project to figure out which starter kit they're tracking:
 
 State your detection out loud and ask the user to confirm. If you can't tell, ask.
 
-Then ask which branch variant they're tracking — typically `main` (Fortify-based auth) or `workos` (WorkOS-based auth). This is not detectable from project state; ask explicitly.
+Then determine the branch variant — `main` (Fortify auth) or `workos` (WorkOS auth) — by inspecting the user's repo. The signals are unambiguous:
+
+- `main` if `composer.json` has `laravel/fortify`, or `config/fortify.php` exists, or `app/Actions/Fortify/` exists, or `app/Providers/FortifyServiceProvider.php` exists.
+- `workos` if `composer.json` has `laravel/workos` and none of the Fortify markers above are present.
+
+State the detected branch out loud so the user can correct you if their project is unusual. Only ask explicitly if the signals are contradictory (some Fortify markers present, also `laravel/workos` in composer) — that means the user has done something custom and you can't safely guess.
 
 See `references/kits.md` for kit-specific notes.
 

@@ -4,7 +4,7 @@ Quick reference. Read the section for the kit the user is on.
 
 ## Shared facts (all three kits)
 
-- Branches: every kit has `main` (Fortify auth) and `workos` (WorkOS auth). Ask the user which they track.
+- Branches: every kit has `main` (Fortify auth) and `workos` (WorkOS auth). Auto-detect from the user's `composer.json` — `laravel/fortify` ⇒ main, `laravel/workos` (and no Fortify markers) ⇒ workos. Sanity-check via the presence of `config/fortify.php`, `app/Actions/Fortify/`, or `app/Providers/FortifyServiceProvider.php`.
 - Versioning: tagged `v1.0.x` but most users follow branch tip — don't rely on tags.
 - Sync cadence: coordinated updates land via Maestro every 2-4 weeks, often in batches across all three.
 - Backend overlap: PHP, configs, auth scaffolding are ~75-80% identical across kits. Frontend differs.
