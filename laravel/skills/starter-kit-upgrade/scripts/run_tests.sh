@@ -51,10 +51,10 @@ cd "$repo"
 # Pick the JS package manager; only meaningful when package.json exists.
 js_package_manager() {
     [[ -f package.json ]] || return 1
-    if   [[ -f pnpm-lock.yaml ]];    then echo pnpm
+    if [[ -f pnpm-lock.yaml ]]; then echo pnpm
     elif [[ -f bun.lockb || -f bun.lock ]]; then echo bun
-    elif [[ -f yarn.lock ]];         then echo yarn
-    else                                  echo npm
+    elif [[ -f yarn.lock ]]; then echo yarn
+    else echo npm
     fi
 }
 
