@@ -1,11 +1,11 @@
 ---
 name: starter-kit-upgrade
-description: Selectively pull upstream improvements from a Laravel starter kit (laravel/vue-starter-kit, laravel/react-starter-kit, laravel/livewire-starter-kit) into a project bootstrapped from one. Use when the user wants to update, sync, or migrate features from their starter kit. Applies one feature at a time on a dedicated branch; never auto-merges customized files.
+description: Selectively pull upstream improvements from a Laravel starter kit (laravel/vue-starter-kit, laravel/react-starter-kit, laravel/svelte-starter-kit, laravel/livewire-starter-kit) into a project bootstrapped from one. Use when the user wants to update, sync, or migrate features from their starter kit. Applies one feature at a time on a dedicated branch; never auto-merges customized files.
 ---
 
 # Laravel Starter Kit Upgrade
 
-- Users bootstrap from `laravel/vue-starter-kit`, `react-starter-kit`, or `livewire-starter-kit`, then customize. They own the code.
+- Users bootstrap from `laravel/vue-starter-kit`, `react-starter-kit`, `svelte-starter-kit`, or `livewire-starter-kit`, then customize. They own the code.
 - We pick **specific features** from upstream (e.g. "toast notifications", "2FA autofocus fix"), not "version upgrades."
 - The user's git history is unrelated to the kit's. There is no common ancestor. We compare user-now vs upstream-now, byte by byte.
 - We never auto-merge a customized file. Customizations are surfaced; the user decides.
@@ -44,7 +44,7 @@ Environment-specific behavior the agent will get wrong without being told. Read 
 
 - **Cumulative bleed.** Copying upstream HEAD pulls in _every_ commit since the feature, not just the feature's own changes. Always run the Phase 5 step 2 check before applying. When bleed is real, scope to `<sha>:<path>` instead of `HEAD:<path>`.
 
-- **Transitive imports.** New files often `import` from helpers that are NOT in the same feature commit (Vue/React: `@/lib/...`, `@/components/...`; Livewire: `@include`, `<x-...>`, `<livewire:...>`). Phase 5 step 4 covers the scan; never declare a feature applied without it. Uncovered imports show up as runtime/compile errors.
+- **Transitive imports.** New files often `import` from helpers that are NOT in the same feature commit (Vue/React/Svelte: `@/lib/...`, `@/components/...`; Livewire: `@include`, `<x-...>`, `<livewire:...>`). Phase 5 step 4 covers the scan; never declare a feature applied without it. Uncovered imports show up as runtime/compile errors.
 
 - **Lockfile drift.** Manifests are user-curated. Never overwrite. Walk the user through the upstream diff, let them merge, then regenerate lockfiles via the package manager (Phase 6).
 
@@ -52,7 +52,10 @@ Environment-specific behavior the agent will get wrong without being told. Read 
 
 - **New migrations.** When upstream adds migrations (e.g. "Catch migrations up to Skeleton"), surface them separately. Recommend `php artisan migrate:status` first; applying a new migration on a populated DB can fail loudly.
 
-- **Major framework bumps as features.** Things like Inertia v2→v3 or a Laravel major-version bump are too large for the feature-by-feature flow. Flag and recommend a dedicated manual upgrade pass instead. The agent should not attempt them through this skill.
+- **Major framework bumps as features.** Things like Laravel 12 → 13, Livewire 3 → 4, or Inertia v2 → v3 are too large and too breaking for the feature-by-feature flow. Do not attempt them through this skill. Instead, prompt the user to run the corresponding [Laravel Boost](https://github.com/laravel/boost) MCP slash command first, then come back and re-run this skill against the resulting (clean-tree) repo. If Boost is not yet installed: `composer require laravel/boost --dev && php artisan boost:install` (requires Boost `^2.0`). Slash commands:
+  - Laravel 12 → 13: `/upgrade-laravel-v13`
+  - Livewire 3 → 4: `/upgrade-livewire-v4`
+  - Inertia v2 → v3: `/upgrade-inertia-v3`
 
 - **Already-present features.** If Phase 2's pre-filter missed it and Phase 5's classifier reports every file as `already-present`, skip the feature with a note: "every file matches upstream's current; moving on." Don't commit an empty commit.
 
@@ -66,20 +69,33 @@ Eight phases, in order. Each phase establishes invariants the next relies on.
 
 Inspect the user's project:
 
-|                     | vue                                           | react                                         | livewire                                  |
-| ------------------- | --------------------------------------------- | --------------------------------------------- | ----------------------------------------- |
-| Cue                 | `.vue` files in `resources/js/components/ui/` | `.tsx` files in `resources/js/components/ui/` | no `resources/js/components/ui/` dir      |
-| `package.json` has  | `"vue"` + `"@inertiajs/vue3"`                 | `"react"` + `"@inertiajs/react"`              | n/a                                       |
-| `composer.json` has | n/a                                           | n/a                                           | `"livewire/livewire"` + `"livewire/flux"` |
+|                     | vue                                              | react                                            | svelte                                              | livewire                                  |
+| ------------------- | ------------------------------------------------ | ------------------------------------------------ | --------------------------------------------------- | ----------------------------------------- |
+| Cue                 | `.vue` files in `resources/js/components/ui/`    | `.tsx` files in `resources/js/components/ui/`    | `.svelte` files in `resources/js/components/ui/`    | no `resources/js/components/ui/` dir      |
+| `package.json` has  | `"vue"` + `"@inertiajs/vue3"`                    | `"react"` + `"@inertiajs/react"`                 | `"svelte"` + `"@inertiajs/svelte"`                  | n/a                                       |
+| `composer.json` has | n/a                                              | n/a                                              | n/a                                                 | `"livewire/livewire"` + `"livewire/flux"` |
 
-State the detected kit out loud. If only one column matches, proceed. If two columns partially match (e.g. both `.vue` and `.tsx` present, or `package.json` lists both `vue` and `react`), stop and ask.
+State the detected kit out loud. If only one column matches, proceed. If two columns partially match (e.g. both `.vue` and `.tsx` present, or `package.json` lists `vue` and `react`), stop and ask.
 
-Then determine the branch variant: `main` (Fortify auth) or `workos` (WorkOS auth).
+Then determine the branch variant. There are four branches per kit, formed by two independent axes:
 
-- `main` if `composer.json` has `laravel/fortify`, or `config/fortify.php` exists, or `app/Actions/Fortify/` exists, or `app/Providers/FortifyServiceProvider.php` exists.
-- `workos` if `composer.json` has `laravel/workos` and none of the Fortify markers are present.
+- **Auth axis** (read `composer.json`):
+  - Fortify if `composer.json` has `laravel/fortify`, or `config/fortify.php` exists, or `app/Actions/Fortify/` exists, or `app/Providers/FortifyServiceProvider.php` exists.
+  - WorkOS if `composer.json` has `laravel/workos` and none of the Fortify markers are present.
+- **Teams axis** (check whether team scaffolding is present):
+  - Teams if `app/Models/Team.php` exists (usually accompanied by `Membership.php`, `TeamInvitation.php`, and a `..._create_teams_table.php` migration).
+  - Non-teams otherwise.
 
-Only ask if signals are contradictory (Fortify markers present _and_ `laravel/workos` in composer); that means user customization you can't safely guess at.
+Combine the two axes to get the branch name:
+
+| Auth    | Teams | Branch          |
+| ------- | ----- | --------------- |
+| Fortify | no    | `main`          |
+| Fortify | yes   | `teams`         |
+| WorkOS  | no    | `workos`        |
+| WorkOS  | yes   | `workos-teams`  |
+
+State the detected branch out loud. Only ask if signals are contradictory (e.g. Fortify markers present _and_ `laravel/workos` in composer, or a `Team.php` model with no teams migration); that means user customization you can't safely guess at.
 
 ### Phase 2: Enumerate available upstream features
 
@@ -199,7 +215,7 @@ Before staging each `new` path, check for the rename gotcha (see Gotchas → "Re
 **4. Transitive-imports check.** New files often import helpers that aren't in the same feature commit. Scan all applied `new` files in one grep; pattern depends on the kit:
 
 ```bash
-# Vue / React: TS/JS imports with @, ~, ./, ../ aliases
+# Vue / React / Svelte: TS/JS imports with @, ~, ./, ../ aliases
 grep -EHn "from ['\"](@/|~/|\\./|\\.\\./)" <new_files...> 2>/dev/null
 
 # Livewire: Blade includes, components, livewire tags
