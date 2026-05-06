@@ -42,7 +42,7 @@ Environment-specific behavior the agent will get wrong without being told. Read 
 
 - **Renamed paths.** If a `new` path's basename or class name already exists elsewhere in the user's repo, the user has likely renamed/moved it. Surface, don't auto-apply, or you'll create a duplicate. Show them the upstream change and let them apply it to their renamed file by hand or wait for user confirmation.
 
-- **Cumulative bleed.** Copying upstream HEAD pulls in _every_ commit since the feature, not just the feature's own changes. Always run the Phase 5 step 2 check before applying. When bleed is real, scope to `<sha>:<path>` instead of `HEAD:<path>`.
+- **Later upstream edits.** Copying upstream HEAD pulls in _every_ commit since the feature, not just the feature's own changes. Always run the Phase 5 step 2 check before applying. When later edits exist, scope to `<sha>:<path>` instead of `HEAD:<path>`.
 
 - **Transitive imports.** New files often `import` from helpers that are NOT in the same feature commit (Vue/React/Svelte: `@/lib/...`, `@/components/...`; Livewire: `@include`, `<x-...>`, `<livewire:...>`). Phase 5 step 4 covers the scan; never declare a feature applied without it. Uncovered imports show up as runtime/compile errors.
 
@@ -160,12 +160,13 @@ scripts/run_tests.sh <user_repo> --baseline "$baseline"
 
 Hold onto `$baseline`; Phase 7 needs it.
 
-Fetch the upstream kit:
+Fetch the upstream kit and capture its path:
 
 ```bash
-git clone --quiet --depth 500 --branch <branch> \
-  "https://github.com/laravel/<kit>.git" /tmp/starter-kit-<kit>
+kit_dir=$(scripts/fetch_kit.sh <kit> <branch>)
 ```
+
+Hold onto `$kit_dir`; Phase 5 needs it. The script is idempotent: re-running with the same args fetches the latest branch tip rather than re-cloning.
 
 Create the upgrade branch:
 
@@ -189,44 +190,35 @@ For each selected feature, in order:
 
 The classifier compares only against upstream HEAD. The user's git history doesn't trace back to the kit's, so there's no "before-image" baseline to merge against; we don't try. The feature commit just enumerates which paths to look at.
 
-2. Cumulative-bleed check. Find which feature paths _later_ upstream commits also modified, in one git invocation rather than one per file:
+2. Later-edits check. Find which feature paths _later_ upstream commits also modified:
 
 ```bash
-paths=$(scripts/classify_feature.sh <kit_dir> <sha> <user_repo> | cut -f2)
-git -C <kit_dir> log --name-only --pretty=format: <sha>..HEAD -- $paths | sort -u
+scripts/later_edits.sh <kit_dir> <sha> <user_repo>
 ```
 
-For any returned path, copying upstream HEAD's content pulls _those_ later changes in too. Diff `<sha>:<path>` against `HEAD:<path>`; if a non-whitespace hunk differs, scope to the feature commit (`git -C <kit_dir> show <sha>:<path>`) and note it in the report.
+Each path the script prints is a path where copying upstream HEAD's content pulls _later_ changes in too. Diff `<sha>:<path>` against `HEAD:<path>`; if a non-whitespace hunk differs, scope to the feature commit (`git -C <kit_dir> show <sha>:<path>`) and note it in the report.
 
-**3. Apply `new` files.** Loop over the classifier output:
+**3. Apply `new` files.** The script writes upstream HEAD's content for each `new` path and stages it; everything else is left for steps 4–5:
 
 ```bash
-scripts/classify_feature.sh <kit_dir> <sha> <user_repo> \
-  | awk -F'\t' '$1=="new"{print $2}' \
-  | while IFS= read -r path; do
-      mkdir -p "<user_repo>/$(dirname "$path")"
-      git -C <kit_dir> show "HEAD:$path" > "<user_repo>/$path"
-      git -C <user_repo> add -- "$path"
-    done
+scripts/apply_new_files.sh <kit_dir> <sha> <user_repo>
 ```
 
-Before staging each `new` path, check for the rename gotcha (see Gotchas → "Renamed paths").
+It prints `applied <path>` for each file written so you can collect the list for the feature's commit message and the report.
 
-**4. Transitive-imports check.** New files often import helpers that aren't in the same feature commit. Scan all applied `new` files in one grep; pattern depends on the kit:
+Before letting the script run, check for the rename gotcha (see Gotchas → "Renamed paths"). If a `new` path's basename already exists at a different location in the user's repo, surface to the user before applying.
+
+**4. Transitive-imports check.** New files often import helpers that aren't in the same feature commit. The script picks the right regex for the kit (Vue/React/Svelte handle TS/JS imports; Livewire handles Blade includes / `x-` components / `livewire:` tags):
 
 ```bash
-# Vue / React / Svelte: TS/JS imports with @, ~, ./, ../ aliases
-grep -EHn "from ['\"](@/|~/|\\./|\\.\\./)" <new_files...> 2>/dev/null
-
-# Livewire: Blade includes, components, livewire tags
-grep -EHn "@(include|extends|component|livewire)\\(|<x-|<livewire:" <new_files...> 2>/dev/null
+scripts/scan_transitive_imports.sh <kit> <new_files...>
 ```
 
-For each import target, verify the corresponding file exists in the user's repo. If not, the new files won't compile/render; flag the missing target as a follow-up dependency the user needs to fetch (same walkthrough as `differs`).
+Output is `<file>:<line>:<match>` per import. For each match, verify the corresponding helper file exists in the user's repo. If not, the new files won't compile/render; flag the missing target as a follow-up dependency the user needs to fetch (same walkthrough as `differs`).
 
 **5. Walk the user through `differs`, `deleted-upstream`, and `lockfile`.** One file at a time:
 
-- Show what upstream has: `git -C <kit_dir> show HEAD:<path>` (or `<sha>:<path>` if cumulative bleed flagged this path).
+- Show what upstream has: `git -C <kit_dir> show HEAD:<path>` (or `<sha>:<path>` if `later_edits.sh` flagged this path).
 - Show their current file.
 - Show the diff between the two.
 - Ask the user to pick: take upstream wholesale (lossy; confirm first), keep theirs, or merge by hand (you produce a unified diff for reference; they write the result).
@@ -251,21 +243,13 @@ If the user wants to bail out at any point, leave the branch as-is. They can dro
 
 ### Phase 6: Reconcile manifests if needed
 
-If any feature touched a manifest, lockfiles are out of sync. After the user agrees:
-
-- `composer install` if `composer.lock` exists and `composer.json` was edited.
-- For JS, auto-detect the package manager from the existing lockfile in the repo:
-  - `pnpm-lock.yaml` → `pnpm install`
-  - `bun.lockb` or `bun.lock` → `bun install`
-  - `yarn.lock` → `yarn install`
-  - `package-lock.json` (or none) → `npm install`
-
-If install fails with `ERESOLVE` after a major-version manifest bump (e.g. Vite v7 → v8, React 18 → 19), stale `node_modules` is the usual cause. Clean and reinstall:
+If any feature touched a manifest, lockfiles are out of sync. After the user agrees, run:
 
 ```bash
-rm -rf node_modules <lockfile>
-<package-manager> install
+scripts/reconcile_manifests.sh <user_repo>
 ```
+
+The script runs `composer install` (when `composer.json` + `composer.lock` are both present), auto-detects the JS package manager from the existing lockfile, runs `<pm> install`, and on failure (typically `ERESOLVE` after a major bump like Vite v7 → v8 or React 18 → 19) wipes `node_modules` + the lockfile and retries once.
 
 Commit lockfile updates as a separate `starter-kit-upgrade: dependency lockfiles` commit so they can be reverted independently.
 
@@ -306,7 +290,7 @@ Write to `/tmp/starter-kit-upgrade-report.md` first; never silently into the use
   - Applied: <list>
   - Skipped: <list with reasons>
   - Manual decisions: <if any, with reasoning>
-  - Cumulative bleed avoided: <if any, with paths scoped manually>
+  - Later-edit drift avoided: <if any, with paths scoped manually>
 
 ## Lockfile updates
 
