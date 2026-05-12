@@ -274,7 +274,7 @@ If the project has no discoverable verification commands, say so explicitly in t
 
 ### Phase 8: Write the report
 
-Write to `/tmp/starter-kit-upgrade-report.md` first; never silently into the user's repo. Show the path and ask whether they want it copied in as `STARTER_KIT_UPGRADE.md` or kept out of tree.
+Write to `/tmp/starter-kit-upgrade-report-<id>.md` (where `<id>` matches the upgrade branch's `starter-kit-upgrade/<id>`) first; never silently into the user's repo. Stamping the id keeps concurrent runs and re-runs from clobbering each other. Show the path and ask whether they want it copied in as `STARTER_KIT_UPGRADE.md` or kept out of tree.
 
 ```markdown
 # Starter Kit Upgrade Report
