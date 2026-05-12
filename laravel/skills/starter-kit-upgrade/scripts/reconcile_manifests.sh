@@ -49,8 +49,8 @@ js_lockfile() {
 }
 
 if [[ -f composer.json && -f composer.lock ]]; then
-    echo "==> composer install" >&2
-    composer install
+    echo "==> composer install --no-interaction" >&2
+    composer install --no-interaction
 fi
 
 if [[ -f package.json ]]; then
