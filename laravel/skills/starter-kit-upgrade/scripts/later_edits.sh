@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# cumulative_bleed.sh — for the files a feature commit touches, list which
+# later_edits.sh — for the files a feature commit touches, list which
 # of those files have ALSO been modified by later upstream commits.
 #
-# Usage: cumulative_bleed.sh <kit_dir> <sha> <user_repo>
+# Usage: later_edits.sh <kit_dir> <sha> <user_repo>
 #
 # Output: one path per line. If the list is non-empty, copying upstream
 # HEAD's content for those paths will pull in changes beyond the feature.
@@ -23,9 +23,15 @@ user_repo="$3"
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 
-paths=$("$script_dir/classify_feature.sh" "$kit_dir" "$sha" "$user_repo" | cut -f2)
-[[ -z "$paths" ]] && exit 0
+# Read paths as an array so filenames with spaces/globs survive intact when
+# passed to `git log -- <paths>`.
+paths=()
+while IFS= read -r path; do
+    [[ -n "$path" ]] && paths+=("$path")
+done < <("$script_dir/classify_feature.sh" "$kit_dir" "$sha" "$user_repo" | cut -f2)
 
-git -C "$kit_dir" log --name-only --pretty=format: "${sha}..HEAD" -- $paths \
+[[ ${#paths[@]} -eq 0 ]] && exit 0
+
+git -C "$kit_dir" log --name-only --pretty=format: "${sha}..HEAD" -- "${paths[@]}" \
     | sort -u \
     | sed '/^$/d'
