@@ -174,6 +174,8 @@ Create the upgrade branch:
 git -C <user_repo> checkout -b "starter-kit-upgrade/$(date +%Y%m%d-%H%M)-<first-slug>"
 ```
 
+If the user is already on a `starter-kit-upgrade/...` branch (a previous run that didn't get cleaned up), `checkout -b` will refuse if the new name collides. Don't auto-resolve: ask whether they want to **resume on that branch** (skip the `checkout -b`, keep going from where they were), **start fresh** (the new timestamped name will already differ by minute, so just retry — or bump to `+%Y%m%d-%H%M%S` if it's the same minute), or **abort** so they can clean up manually. Never delete the existing branch on their behalf.
+
 From this point on, every write goes to this branch.
 
 ### Phase 5: Apply each selected feature
