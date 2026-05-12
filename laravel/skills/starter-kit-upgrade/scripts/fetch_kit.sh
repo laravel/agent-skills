@@ -37,8 +37,11 @@ esac
 url="https://github.com/laravel/$kit.git"
 
 if [[ -d "$dest/.git" ]]; then
-    if ! git -C "$dest" remote get-url origin 2>/dev/null | grep -q "$kit"; then
-        echo "ERROR: '$dest' exists but is not a clone of $kit" >&2
+    # Match the exact repo (HTTPS or SSH, with or without .git suffix) so
+    # forks like 'vue-starter-kit-fork' don't pass the check.
+    existing=$(git -C "$dest" remote get-url origin 2>/dev/null || true)
+    if [[ ! "$existing" =~ ^(https://github\.com/|git@github\.com:)laravel/${kit}(\.git)?$ ]]; then
+        echo "ERROR: '$dest' exists but is not a clone of laravel/$kit (origin: ${existing:-none})" >&2
         exit 4
     fi
 
