@@ -27,6 +27,9 @@ npx skills add https://github.com/laravel/agent-skills/tree/main/laravel-cloud/s
 
 # Laravel Nightwatch
 npx skills add https://github.com/laravel/agent-skills/tree/main/laravel-nightwatch/skills/configure-nightwatch
+
+# Starter Kit Upgrade
+npx skills add https://github.com/laravel/agent-skills/tree/main/laravel/skills/starter-kit-upgrade
 ```
 
 ## Usage
@@ -51,16 +54,32 @@ npx skills add https://github.com/laravel/agent-skills/tree/main/laravel-nightwa
 > Set up PII redaction for Nightwatch
 ```
 
+**Starter Kit Upgrade** triggers when you ask to pull upstream improvements into a project bootstrapped from a Laravel starter kit:
+
+```
+> Sync the latest toast notification feature from the Vue starter kit
+> Pull the 2FA autofocus fix from my starter kit upstream
+```
+
 ## Plugins
 
 ### Laravel
 
-An agent that reviews recently modified PHP / Laravel code and refines it for clarity, consistency, and maintainability without changing functionality.
+A bundle of Laravel-focused agents and skills.
+
+**`laravel-simplifier` agent** — Reviews recently modified PHP / Laravel code and refines it for clarity, consistency, and maintainability without changing functionality.
 
 - Applies Laravel conventions and PSR-12 standards
 - Reduces unnecessary complexity and nesting
 - Improves naming and readability
 - Focuses on recently modified code by default
+
+**`starter-kit-upgrade` skill** — Selectively pulls upstream improvements from a Laravel starter kit (`vue-starter-kit`, `react-starter-kit`, `svelte-starter-kit`, `livewire-starter-kit`) into a project bootstrapped from one.
+
+- Picks specific features (e.g. toast notifications, security fixes), not full version bumps
+- Applies one feature at a time on a dedicated branch, each as its own commit
+- Never auto-merges customized files or silently overwrites manifests / lockfiles
+- Re-runs your tests, typecheck, and build to verify behavior preservation
 
 ### Laravel Cloud
 
