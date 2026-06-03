@@ -1,6 +1,6 @@
 ---
 name: deploying-laravel-cloud
-description: "Deploys and manages Laravel applications on Laravel Cloud using the `cloud` CLI. Use when the user wants to deploy an app, ship to cloud, create/manage environments, databases, caches, domains, instances, background processes, or any Laravel Cloud infrastructure. Triggers on deploy, ship, cloud management, environment setup, database provisioning, and similar cloud operations."
+description: "Deploys and manages Laravel applications on Laravel Cloud using the `cloud` CLI. Use when the user wants to deploy an app, ship to cloud, create/manage environments, databases, caches, domains, instances, background processes, check billing/usage/spend, or any Laravel Cloud infrastructure. Triggers on deploy, ship, cloud management, environment setup, database provisioning, billing/usage queries, and similar cloud operations."
 ---
 # Deploying with Laravel Cloud CLI
 
@@ -98,7 +98,7 @@ Use your judgment:
 
 ## Remote Access
 
-### Tinker (> v0.2.0)
+### Tinker (>= v0.2.0)
 
 Run PHP code directly in a Cloud environment:
 
@@ -131,6 +131,29 @@ Review past commands:
 - `cloud command:get {commandId} --json -n` — get details and output of a specific command
 
 Delegate `command:run` to a subagent when output may be long.
+
+## Billing & Usage
+
+View billing and usage for the current organization:
+
+```sh
+cloud usage --json -n
+```
+
+- `--period=current|previous|1|2|3` — billing period (default `current`; `1`/`2`/`3` are N periods back, max 3). Anything else errors out.
+- `--environment=<id>` — filter usage to a single environment
+- `--detailed` — include per-application, per-resource, and per-add-on breakdowns
+- `--json` — machine-readable output (always pair with `-n`)
+
+Common queries:
+
+- Current spend: `cloud usage --json -n | jq '.currentSpendCents'`
+- Last month's bill: `cloud usage --period=previous --json -n`
+- One environment, full breakdown: `cloud usage --environment=<id> --detailed --json -n`
+
+All amounts are in cents. Keys are camelCase at every level (e.g. `currentSpendCents`, `bandwidth.allowanceBytes`, `databases[].totalCents`, `applications[].totalCostCents`).
+
+Delegate `--detailed --json` to a subagent — the payload includes every database, cache, bucket, websocket, and application and can get large.
 
 ## Config
 
