@@ -16,6 +16,50 @@
 
 ---
 
+## Filtering Examples by Event Type
+
+```php
+// Mail — filter by subject
+Nightwatch::rejectMail(fn (Mail $mail) => str_contains($mail->subject, 'Newsletter'));
+
+// Notifications — filter by channel
+Nightwatch::rejectNotifications(fn (Notification $n) => $n->channel === 'database');
+
+// Outgoing requests — filter by URL
+Nightwatch::rejectOutgoingRequests(fn (OutgoingRequest $r) => str_contains($r->url, 'analytics.example.com'));
+
+// Queued jobs — filter by class name
+Nightwatch::rejectQueuedJobs(fn (QueuedJob $job) => $job->name === 'App\Jobs\LowPriorityJob');
+```
+
+Env vars to disable entirely: `NIGHTWATCH_IGNORE_MAIL`, `NIGHTWATCH_IGNORE_NOTIFICATIONS`, `NIGHTWATCH_IGNORE_OUTGOING_REQUESTS`.
+
+---
+
+## Redaction Examples by Event Type
+
+```php
+// Queries — scrub tokens from SQL
+Nightwatch::redactQueries(fn (Query $q) => $q->sql = str_replace('secret_token', '***', $q->sql));
+
+// Cache — mask user IDs in keys
+Nightwatch::redactCacheEvents(fn (CacheEvent $e) => $e->key = preg_replace('/user:\d+/', 'user:***', $e->key));
+
+// Commands — strip password flags
+Nightwatch::redactCommands(fn (Command $c) => $c->command = preg_replace('/--password=\S+/', '--password=***', $c->command));
+
+// Exceptions — remove secrets from messages
+Nightwatch::redactExceptions(fn (Exception $e) => $e->message = str_replace('secret', '***', $e->message));
+
+// Mail — mask invoice numbers
+Nightwatch::redactMail(fn (Mail $m) => $m->subject = str_replace('Invoice #', 'Invoice ***', $m->subject));
+
+// Outgoing requests — strip API keys from URLs
+Nightwatch::redactOutgoingRequests(fn (OutgoingRequest $r) => $r->url = preg_replace('/api_key=\w+/', 'api_key=***', $r->url));
+```
+
+---
+
 ## Production Recommendations
 
 ### High-Traffic Applications
@@ -55,19 +99,6 @@ NIGHTWATCH_EXCEPTION_SAMPLE_RATE=1.0
 
 ---
 
-## Verification Checklist
-
-After configuration:
-
-- [ ] Sampling rates appropriate for traffic volume
-- [ ] Noisy events filtered (cache, certain queries)
-- [ ] Sensitive data redacted (PII, tokens, credentials)
-- [ ] Exceptions always captured for debugging
-- [ ] Test in development with `NIGHTWATCH_REQUEST_SAMPLE_RATE=1.0`
-- [ ] Monitor event quota usage in Nightwatch dashboard
-
----
-
 ## Common Patterns
 
 ### Filter Health Checks + Reduce Sampling
@@ -93,3 +124,16 @@ Nightwatch::redactCacheEvents(fn($e) =>
     $e->key = preg_replace('/user:\d+/', 'user:***', $e->key)
 );
 ```
+
+---
+
+## Verification Checklist
+
+After configuration:
+
+- [ ] Sampling rates appropriate for traffic volume
+- [ ] Noisy events filtered (cache, certain queries)
+- [ ] Sensitive data redacted (PII, tokens, credentials)
+- [ ] Exceptions always captured for debugging
+- [ ] Test in development with `NIGHTWATCH_REQUEST_SAMPLE_RATE=1.0`
+- [ ] Monitor event quota usage in Nightwatch dashboard
