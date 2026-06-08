@@ -42,6 +42,8 @@ Environment-specific behavior the agent will get wrong without being told. Read 
 
 - **Renamed paths.** If a `new` path's basename or class name already exists elsewhere in the user's repo, the user has likely renamed/moved it. Surface, don't auto-apply, or you'll create a duplicate. Show them the upstream change and let them apply it to their renamed file by hand or wait for user confirmation.
 
+- **Livewire kit canonical view paths.** The `laravel/livewire-starter-kit` uses `resources/views/livewire/` for Livewire component views by default — this is NOT a user customization or a renamed `pages/` directory. Do not emit a "structural note" about path adaptation for this directory. Only flag a view path as renamed if you have concrete evidence the user moved it from a different location (e.g. the path exists at a different location in their repo alongside the expected one).
+
 - **Later upstream edits.** Copying upstream HEAD pulls in _every_ commit since the feature, not just the feature's own changes. Always run the Phase 5 step 2 check before applying. When later edits exist, scope to `<sha>:<path>` instead of `HEAD:<path>`.
 
 - **Transitive imports.** New files often `import` from helpers that are NOT in the same feature commit (Vue/React/Svelte: `@/lib/...`, `@/components/...`; Livewire: `@include`, `<x-...>`, `<livewire:...>`). Phase 5 step 4 covers the scan; never declare a feature applied without it. Uncovered imports show up as runtime/compile errors.
