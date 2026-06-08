@@ -97,6 +97,20 @@ Combine the two axes to get the branch name:
 
 State the detected branch out loud. Only ask if signals are contradictory (e.g. Fortify markers present _and_ `laravel/workos` in composer, or a `Team.php` model with no teams migration); that means user customization you can't safely guess at.
 
+**Component-format axis (livewire kit only).** The livewire kit ships in two component formats, on separate branches, and a scaffolded project can be in either. Detecting the wrong one is the difference between clean diffs and every auth/settings view falsely classifying as `new`.
+
+- **Single-file components** — page views live in `resources/views/pages/**`; there is no `app/Livewire/Settings/`. This is what `main` (and `teams`/`workos`/`workos-teams`) ship.
+- **Class-based components** — `app/Livewire/{Actions,Settings}/**` plus `resources/views/livewire/**`, and no `resources/views/pages/`. This is the **`components`** branch. It exists for Fortify + non-teams only.
+
+Detect from the project, then override the branch from the table above if needed:
+
+- `resources/views/pages/` present → single-file. Keep the auth/teams branch.
+- `app/Livewire/Settings/` + `resources/views/livewire/` present and `resources/views/pages/` absent → class-based. Use the **`components`** branch instead of `main`. (This is the layout a default `laravel new` produces; it is the installer's chosen format, **not** a user-renamed `pages/` directory — do not flag it as a rename.)
+
+If the project is class-based **and** uses WorkOS or teams, no matching branch exists. State this and ask the user how to proceed rather than diffing against a mismatched branch.
+
+The `components` source carries `/* @chisel-* */` feature-marker comments that the installer strips at scaffold time, so a handful of auth/settings files may show comment-only `differs`. Treat those as cosmetic.
+
 ### Phase 2: Enumerate available upstream features
 
 The user can't tell you "what version they're on" reliably (and we don't try). Inspect upstream as it exists today and present a feature catalog.
