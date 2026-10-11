@@ -45,7 +45,7 @@
       "name": "laravel-lsp",
       "source": "./laravel-lsp",
       "description": "Laravel language server for PHP code intelligence",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Taylor Otwell",
         "email": "taylor@laravel.com"

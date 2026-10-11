@@ -1,6 +1,6 @@
 {
     "name": "laravel-lsp",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Laravel language server for PHP code intelligence",
     "author": {
         "name": "Taylor Otwell",
