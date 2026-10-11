@@ -5,5 +5,14 @@
     "author": {
         "name": "Taylor Otwell",
         "email": "taylor@laravel.com"
+    },
+    "lspServers": {
+        "laravel-lsp": {
+            "command": "laravel-lsp",
+            "args": [],
+            "extensionToLanguage": {
+                ".php": "php"
+            }
+        }
     }
 }
